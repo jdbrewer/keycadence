@@ -47,6 +47,7 @@ if ! xcodebuild -project Keycadence.xcodeproj -scheme Keycadence -configuration 
     CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY="$identity" DEVELOPMENT_TEAM="$team" \
     PROVISIONING_PROFILE_SPECIFIER="" CODE_SIGN_INJECT_BASE_ENTITLEMENTS=NO \
     OTHER_CODE_SIGN_FLAGS="--timestamp" \
+    DEPLOYMENT_POSTPROCESSING=YES STRIP_INSTALLED_PRODUCT=YES \
     MARKETING_VERSION="$version" CURRENT_PROJECT_VERSION="$(git rev-list --count HEAD)" \
     build >"$log" 2>&1; then
   grep -E "error:|BUILD FAILED" "$log" >&2 || tail -20 "$log" >&2
@@ -68,6 +69,9 @@ done
 print -r -- "$entitlements" | grep -q com.apple.security.app-sandbox || { print -u2 "The sandbox is off."; exit 1 }
 built=$(/usr/libexec/PlistBuddy -c 'Print CFBundleShortVersionString' "$app/Contents/Info.plist")
 [[ $built == $version ]] || { print -u2 "The app says version $built, not $version."; exit 1 }
+if LC_ALL=C grep -a -q -F "$HOME" "$app/Contents/MacOS/Keycadence"; then
+  print -u2 "The binary contains your home folder path."; exit 1
+fi
 
 if [[ $mode != --dry-run ]]; then
   print "Notarizing: this usually takes a few minutes"
