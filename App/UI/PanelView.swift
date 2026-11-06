@@ -8,8 +8,6 @@ struct PanelView: View {
     let engine: OpaquePointer
     let openSettings: () -> Void
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 8), count: 3)
-
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             header
@@ -23,12 +21,16 @@ struct PanelView: View {
                 Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary).font(.caption)
             }
 
-            LazyVGrid(columns: columns, spacing: 8) {
-                ForEach(allSwitches) { info in
-                    KeycapButton(info: info, selected: prefs.switchID == info.id, hoverPreview: prefs.hoverPreview,
-                                 engine: engine) {
-                        prefs.switchID = info.id
-                        kc_engine_preview_profile(engine, Int32(info.id))
+            Grid(horizontalSpacing: 8, verticalSpacing: 8) {
+                ForEach(Array(stride(from: 0, to: allSwitches.count, by: 3)), id: \.self) { start in
+                    GridRow {
+                        ForEach(allSwitches[start..<min(start + 3, allSwitches.count)]) { info in
+                            KeycapButton(info: info, selected: prefs.switchID == info.id, hoverPreview: prefs.hoverPreview,
+                                         engine: engine) {
+                                prefs.switchID = info.id
+                                kc_engine_preview_profile(engine, Int32(info.id))
+                            }
+                        }
                     }
                 }
             }

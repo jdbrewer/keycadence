@@ -28,6 +28,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var item: NSStatusItem!
     private var popover: NSPopover?
     private var settingsWindow: NSWindow?
+    #if DEBUG
+    private var keepPanelOpen = false
+    #endif
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         #if DEBUG
@@ -65,10 +68,47 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         permission.start()
         // First launch without permission: show why nothing is playing yet.
-        if !permission.granted { openPanel() }
+        #if DEBUG
+        if CommandLine.arguments.contains("--panel-frame") { reportPanelFrame() }
+        #endif
+        if !permission.granted {
+            // The icon has no place in the menu bar until the run loop has turned, and a
+            // popover shown before then never appears.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in self?.openPanel() }
+        }
     }
 
     #if DEBUG
+    /// Prints where the panel lands against the screen as it opens at launch, reopens, and
+    /// loses the permission card, then quits. Launched from a shell the app isn't active, and
+    /// a transient popover closes at once, so this one is kept open.
+    private func reportPanelFrame() {
+        keepPanelOpen = true
+        func report(_ label: String) {
+            guard let window = popover?.contentViewController?.view.window,
+                  let screen = window.screen ?? NSScreen.main else {
+                print("\(label): panel not showing")
+                return
+            }
+            // The window has invisible margins, so measure the content the person sees.
+            guard let content = popover?.contentViewController?.view else { return }
+            let frame = window.convertToScreen(content.convert(content.bounds, to: nil))
+            let visible = screen.visibleFrame
+            print("\(label): content top \(frame.maxY) height \(frame.height), usable top \(visible.maxY);",
+                  visible.contains(frame) ? "fits, \(visible.maxY - frame.maxY) below the menu bar" : "OFF SCREEN by \(frame.maxY - visible.maxY)")
+        }
+        func after(_ delay: Double, _ work: @escaping @MainActor () -> Void) {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { MainActor.assumeIsolated(work); fflush(stdout) }
+        }
+        after(0.25) { [weak self] in self?.openPanel() }
+        after(0.6) { report("launch") }
+        after(0.7) { [weak self] in self?.popover?.close() }
+        after(0.9) { [weak self] in self?.openPanel() }
+        after(1.2) { report("reopen") }
+        after(1.3) { [weak self] in self?.permission.debugSetGranted(true) }
+        after(1.8) { report("granted"); exit(0) }
+    }
+
     /// Runs every quiet rule's check inside the real sandbox.
     private func runProbes() {
         print("output:", QuietProbes.outputKind())
@@ -128,8 +168,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             p.animates = false // appears instantly
             let root = PanelView(prefs: prefs, permission: permission, engine: engine,
                                  openSettings: { [weak self] in self?.openSettings() })
-            p.contentViewController = NSHostingController(rootView: root)
+            let host = NSHostingController(rootView: root)
+            host.sizingOptions = [.preferredContentSize]
+            p.contentViewController = host
             popover = p
+            #if DEBUG
+            if keepPanelOpen { p.behavior = .applicationDefined }
+            #endif
+        }
+        // Give the popover its real size first. It's placed using the size it has when shown,
+        // and if it grows afterwards, it grows upward, past the top of the screen.
+        if let view = popover?.contentViewController?.view {
+            view.layoutSubtreeIfNeeded()
+            popover?.contentSize = view.fittingSize
         }
         NSApp.activate(ignoringOtherApps: true)
         popover?.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -191,6 +242,10 @@ final class InputPermission {
             timer = t
         }
     }
+
+    #if DEBUG
+    func debugSetGranted(_ value: Bool) { granted = value }
+    #endif
 
     func request() {
         if !kc_tap_request_permission() { openSystemSettings() }
