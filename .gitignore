@@ -1,0 +1,12 @@
+.DS_Store
+.build/
+build/
+DerivedData/
+*.xcodeproj/
+xcuserdata/
+.swiftpm/
+__pycache__/
+/preview/
+/sources/
+/latency-results/
+/notes/
