@@ -27,7 +27,7 @@ brew install --cask jdbrewer/tap/keycadence
 Or download the zip from [Releases](https://github.com/jdbrewer/keycadence/releases) and move
 the app to Applications.
 
-On first launch, macOS asks for **Input Monitoring**, which lets the app detect key presses.
+On first launch, the app asks you to allow **Input Monitoring**, which lets it detect key presses.
 Each press only chooses a sound. Presses are never stored.
 
 ## How it's fast
